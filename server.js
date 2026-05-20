@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const bcrypt = require('bcryptjs'); 
+const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,35 +11,54 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const DB_PATH = path.join(__dirname, 'database.json');
+// Подключение к MongoDB Atlas (берется из настроек Render)
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('Успешно подключено к вечной базе MongoDB Atlas!'))
+    .catch(err => console.error('Ошибка подключения к MongoDB:', err));
 
-function readDB() {
-    if (!fs.existsSync(DB_PATH)) {
-        const initialData = { users: [], sharedFolders: {}, accessLogs: [], activityLogs: [] };
-        fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2), 'utf8');
-        return initialData;
-    }
-    try {
-        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    } catch (e) {
-        return { users: [], sharedFolders: {}, accessLogs: [], activityLogs: [] };
-    }
-}
+// Подключение к Cloudinary (для хранения файлов)
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-function writeDB(data) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
-}
+// --- СХЕМЫ ДАННЫХ ДЛЯ МОНГО ---
+const UserSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: String, city: String, school: String,
+    name: String, surname: String, subject: String,
+    fullName: String, grade: String
+});
+const User = mongoose.model('User', UserSchema);
 
-// Регулярные выражения для жесткой проверки на стороне сервера
+const FolderSchema = new mongoose.Schema({
+    folderId: { type: String, required: true, unique: true },
+    ownerId: String, name: String, password: String, isPrivate: Boolean,
+    files: [{ type: { type: String }, name: String, url: String }]
+});
+const Folder = mongoose.model('Folder', FolderSchema);
+
+const AccessLogSchema = new mongoose.Schema({
+    folderId: String, folderName: String, teacherId: String,
+    studentName: String, city: String, school: String, grade: String,
+    timestamp: String
+});
+const AccessLog = mongoose.model('AccessLog', AccessLogSchema);
+
+const ActivityLogSchema = new mongoose.Schema({
+    userId: String, actionType: String, text: String, timestamp: String
+});
+const ActivityLog = mongoose.model('ActivityLog', ActivityLogSchema);
+
 const cyrillicRegex = /^[А-Яа-яЁё\s\-]+$/;
-// Для школы разрешаем буквы (рус/eng), цифры, пробелы, дефисы, кавычки и знаки №
 const schoolRegex = /^[А-Яа-яЁёA-Za-z0-9\s\-\.,№()""«»]+$/;
 
 // 1. РЕГИСТРАЦИЯ
 app.post('/api/register', async (req, res) => {
     const { username, password, role, city, school, name, surname, subject, fullName, grade } = req.body;
     
-    // Проверка на заполненность абсолютно ВСЕХ полей
     if (!username || !password || !role || !city || !school) {
         return res.status(400).json({ success: false, message: 'Все основные поля должны быть заполнены!' });
     }
@@ -49,160 +69,146 @@ app.post('/api/register', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Заполните все поля личных данных ученика!' });
     }
 
-    // Проверка корректности языка
-    if (!cyrillicRegex.test(city)) {
-        return res.status(400).json({ success: false, message: 'Название города должно быть написано на русском языке!' });
-    }
-    if (!schoolRegex.test(school)) {
-        return res.status(400).json({ success: false, message: 'Поле "Школа" заполнено некорректно (разрешены буквы, цифры и знак №)!' });
-    }
-    if (role === 'teacher') {
-        if (!cyrillicRegex.test(name) || !cyrillicRegex.test(surname) || !cyrillicRegex.test(subject)) {
-            return res.status(400).json({ success: false, message: 'Данные учителя (Имя, Фамилия, Предмет) вводятся только на русском!' });
-        }
-    }
-    if (role === 'student' && !cyrillicRegex.test(fullName)) {
-        return res.status(400).json({ success: false, message: 'ФИО ученика должно быть написано только на русском языке!' });
-    }
-
-    const db = readDB();
-    if (db.users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-        return res.status(400).json({ success: false, message: 'Этот логин уже занят другим пользователем!' });
-    }
+    if (!cyrillicRegex.test(city)) return res.status(400).json({ success: false, message: 'Город пишется на русском!' });
+    if (!schoolRegex.test(school)) return res.status(400).json({ success: false, message: 'Поле "Школа" заполнено некорректно!' });
 
     try {
+        const candidate = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+        if (candidate) return res.status(400).json({ success: false, message: 'Этот логин уже занят!' });
+
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        let newUser = { username, password: hashedPassword, role, city, school };
+        const newUser = new User({ username, password: hashedPassword, role, city, school });
         if (role === 'teacher') {
             newUser.name = name; newUser.surname = surname; newUser.subject = subject;
         } else {
             newUser.fullName = fullName; newUser.grade = grade;
         }
 
-        db.users.push(newUser);
-        writeDB(db);
-        res.json({ success: true, message: 'Регистрация успешно завершена!' });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Внутренняя ошибка шифрования данных.' });
+        await newUser.save();
+        res.json({ success: true, message: 'Регистрация успешна!' });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации.' });
     }
 });
 
 // 2. АВТОРИЗАЦИЯ
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ success: false, message: 'Заполните логин и пароль!' });
-    }
+    if (!username || !password) return res.status(400).json({ success: false, message: 'Заполните fields!' });
 
-    const db = readDB();
-    const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    
-    if (!user) {
-        return res.status(401).json({ success: false, message: 'Неверный логин или пароль!' });
-    }
+    try {
+        const user = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+        if (!user) return res.status(401).json({ success: false, message: 'Неверный логин или пароль!' });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (isMatch) {
-        const { password, ...safeUserData } = user;
-        res.json({ success: true, user: safeUserData });
-    } else {
-        res.status(401).json({ success: false, message: 'Неверный логин или пароль!' });
-    }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ success: false, message: 'Неверный логин или пароль!' });
+
+        const { password: _, ...safeData } = user._doc;
+        res.json({ success: true, user: safeData });
+    } catch(e) { res.status(500).json({ success: false }); }
 });
 
-// 3. ПОЛУЧЕНИЕ СПИСКА УЧИТЕЛЕЙ
-app.get('/api/teachers', (req, res) => {
-    const db = readDB();
-    const teachersList = db.users.filter(u => u.role === 'teacher').map(t => {
-        const teacherFolders = Object.keys(db.sharedFolders)
-            .filter(key => db.sharedFolders[key].ownerId === t.username && !db.sharedFolders[key].isPrivate)
-            .map(key => ({ id: key, name: db.sharedFolders[key].name }));
-        return {
-            username: t.username, name: t.name, surname: t.surname,
-            subject: t.subject, city: t.city, school: t.school, folders: teacherFolders
-        };
-    });
-    res.json(teachersList);
+// 3. СПИСОК УЧИТЕЛЕЙ
+app.get('/api/teachers', async (req, res) => {
+    try {
+        const teachers = await User.find({ role: 'teacher' });
+        const list = await Promise.all(teachers.map(async (t) => {
+            const folders = await Folder.find({ ownerId: t.username, isPrivate: false });
+            return {
+                username: t.username, name: t.name, surname: t.surname,
+                subject: t.subject, city: t.city, school: t.school,
+                folders: folders.map(f => ({ id: f.folderId, name: f.name }))
+            };
+        }));
+        res.json(list);
+    } catch (e) { res.status(500).json([]); }
 });
 
 // 4. СОЗДАНИЕ ПАПКИ
-app.post('/api/create-folder', (req, res) => {
+app.post('/api/create-folder', async (req, res) => {
     const { folderId, name, password, ownerId, isPrivate } = req.body;
-    if (!folderId || !name) return res.status(400).json({ error: 'Заполните ID и Название папки' });
-    
-    const db = readDB();
-    db.sharedFolders[folderId] = { 
-        ownerId, name, password: isPrivate ? null : password, isPrivate: !!isPrivate, files: [] 
-    };
-    
-    db.activityLogs.push({
-        userId: ownerId, actionType: "folder",
-        text: isPrivate ? `Создан личный сейф документов "${name}"` : `Создана общая папка "${name}" (ID: ${folderId})`,
-        timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('ru-RU')
-    });
-    writeDB(db);
-    res.json({ success: true, message: isPrivate ? 'Личная папка успешно добавлена в сейф!' : 'Защищенная папка создана!' });
+    if (!folderId || !name) return res.status(400).json({ error: 'Заполните ID и Название' });
+
+    try {
+        const newFolder = new Folder({ folderId, ownerId, name, password: isPrivate ? null : password, isPrivate: !!isPrivate, files: [] });
+        await newFolder.save();
+
+        const log = new ActivityLog({
+            userId: ownerId, actionType: "folder",
+            text: isPrivate ? `Создан личный сейф документов "${name}"` : `Создана общая папка "${name}" (ID: ${folderId})`,
+            timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString('ru-RU')
+        });
+        await log.save();
+        res.json({ success: true, message: 'Папка создана!' });
+    } catch(e) { res.status(400).json({ error: 'Такой ID папки уже существует!' }); }
 });
 
-// 5. ДОБАВЛЕНИЕ ФАЙЛА
-app.post('/api/add-file', (req, res) => {
+// 5. ЗАГРУЗКА ФАЙЛА В ОБЛАКО
+app.post('/api/add-file', async (req, res) => {
     const { folderId, fileType, fileName, fileData } = req.body;
-    const db = readDB();
-    const folder = db.sharedFolders[folderId];
-    if (!folder) return res.status(404).json({ error: 'Папка с таким ID не найдена!' });
+    if(!folderId || !fileData) return res.status(400).json({ error: 'Данные отсутствуют' });
 
-    folder.files.push({ type: fileType, name: fileName, url: fileData });
-    writeDB(db);
-    res.json({ success: true, message: `Файл "${fileName}" успешно сохранен!` });
-});
+    try {
+        const folder = await Folder.findOne({ folderId });
+        if (!folder) return res.status(404).json({ error: 'Папка не найдена!' });
 
-// 6. ДОСТУП К ПАПКЕ ПО ПАРОЛЮ
-app.post('/api/access-folder', (req, res) => {
-    const { folderId, password, studentInfo } = req.body;
-    const db = readDB();
-    const folder = db.sharedFolders[folderId];
-    
-    if (!folder) return res.status(404).json({ success: false, message: 'Папка не найдена' });
-    if (folder.isPrivate) return res.status(403).json({ success: false, message: 'Доступ запрещен. Это личный сейф учителя!' });
-
-    if (folder.password === password) {
-        const teacher = db.users.find(u => u.username === folder.ownerId);
-        db.accessLogs.push({
-            folderId, folderName: folder.name, studentName: studentInfo.fullName || studentInfo.username,
-            city: studentInfo.city, school: studentInfo.school, grade: studentInfo.grade,
-            timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        const uploadRes = await cloudinary.uploader.upload(fileData, {
+            resource_type: "auto", 
+            folder: "dalaspace_files"
         });
-        writeDB(db);
-        res.json({ 
-            success: true, folder: { name: folder.name, files: folder.files },
-            author: teacher ? `${teacher.surname} ${teacher.name}` : "Преподаватель"
-        });
-    } else {
-        res.status(401).json({ success: false, message: 'Неверный пароль' });
+
+        folder.files.push({ type: fileType, name: fileName, url: uploadRes.secure_url });
+        await folder.save();
+
+        res.json({ success: true, message: `Файл "${fileName}" загружен в облако!` });
+    } catch (err) {
+        res.status(500).json({ error: 'Ошибка облака Cloudinary' });
     }
 });
 
+// 6. ДОСТУП К ПАПКЕ
+app.post('/api/access-folder', async (req, res) => {
+    const { folderId, password, studentInfo } = req.body;
+    try {
+        const folder = await Folder.findOne({ folderId });
+        if (!folder) return res.status(404).json({ success: false, message: 'Папка не найдена' });
+        if (folder.isPrivate) return res.status(403).json({ success: false, message: 'Это личный сейф!' });
+
+        if (folder.password === password) {
+            const teacher = await User.findOne({ username: folder.ownerId });
+            
+            const log = new AccessLog({
+                folderId, folderName: folder.name, teacherId: folder.ownerId,
+                studentName: studentInfo.fullName || studentInfo.username,
+                city: studentInfo.city, school: studentInfo.school, grade: studentInfo.grade,
+                timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+            });
+            await log.save();
+
+            res.json({ success: true, folder: { name: folder.name, files: folder.files }, author: teacher ? `${teacher.surname} ${teacher.name}` : "Преподаватель" });
+        } else {
+            res.status(401).json({ success: false, message: 'Неверный пароль' });
+        }
+    } catch(e) { res.status(500).json({ success: false }); }
+});
+
 // 7. АНАЛИТИКА
-app.get('/api/analytics/:teacherId', (req, res) => {
-    const { teacherId } = req.params;
-    const db = readDB();
-    const teacherLogs = db.accessLogs.filter(log => {
-        const folder = db.sharedFolders[log.folderId];
-        return folder && folder.ownerId === teacherId;
-    });
-    res.json(teacherLogs);
+app.get('/api/analytics/:teacherId', async (req, res) => {
+    try {
+        const logs = await AccessLog.find({ teacherId: req.params.teacherId });
+        res.json(logs);
+    } catch(e) { res.json([]); }
 });
 
-// 8. ДАННЫЕ ПРОФИЛЯ
-app.get('/api/profile-data/:username', (req, res) => {
-    const db = readDB();
-    const userFolders = Object.keys(db.sharedFolders)
-        .filter(key => db.sharedFolders[key].ownerId === req.params.username)
-        .map(key => ({ id: key, ...db.sharedFolders[key] }));
-    const userHistory = db.activityLogs.filter(log => log.userId === req.params.username);
-    res.json({ folders: userFolders, history: userHistory });
+// 8. ПРОФИЛЬ
+app.get('/api/profile-data/:username', async (req, res) => {
+    try {
+        const folders = await Folder.find({ ownerId: req.params.username });
+        const history = await ActivityLog.find({ userId: req.params.username });
+        res.json({ folders, history });
+    } catch(e) { res.json({ folders: [], history: [] }); }
 });
 
-app.listen(PORT, () => console.log(`Сервер стабильно работает онлайн на порту: ${PORT}`));
+app.listen(PORT, () => console.log(`Сервер DALASPACE запущен!`));
