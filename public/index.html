@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dalaspace — Инновационная образовательная среда</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 relative">
+
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <nav class="bg-gradient-to-r from-violet-600 to-indigo-700 text-white shadow-xl px-6 py-4 flex justify-between items-center">
+        <div class="text-2xl font-extrabold tracking-wider flex items-center gap-2 cursor-pointer" onclick="handleLogoClick()">
+            🚀 <span class="bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-yellow-400">dalaspace</span>
+        </div>
+        <div id="nav-buttons" class="flex gap-3">
+            <button onclick="openAuthModal('teacher')" class="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-semibold transition">Я Учитель</button>
+            <button onclick="openAuthModal('student')" class="bg-amber-400 hover:bg-amber-500 text-slate-950 px-4 py-2 rounded-xl font-bold transition shadow-md">Я Ученик</button>
+        </div>
+        <div id="user-profile-badge" class="hidden flex items-center gap-4">
+            <div onclick="goToProfileScreen()" class="flex items-center gap-2.5 cursor-pointer bg-white/10 hover:bg-white/20 p-1.5 pr-4 rounded-full transition border border-white/10 group shadow-sm">
+                <div id="avatar-circle" class="w-9 h-9 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-slate-900 font-extrabold flex items-center justify-center text-sm uppercase">U</div>
+                <div class="text-left">
+                    <span id="badge-info" class="text-xs font-bold block leading-none">Профиль</span>
+                    <span class="text-[10px] text-amber-200 block mt-0.5 font-medium">Мой кабинет</span>
+                </div>
+            </div>
+            <button onclick="logout()" class="text-xs bg-rose-500 hover:bg-rose-600 px-3 py-2 rounded-xl font-bold transition">Выйти</button>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-6">
+
+        <section id="welcome-screen" class="block text-center py-20 space-y-6">
+            <h1 class="text-5xl font-extrabold text-slate-900 tracking-tight">Удобное пространство для <br><span class="text-violet-600">учителей</span> и их <span class="text-amber-500">учеников</span></h1>
+            <p class="text-slate-500 text-lg max-w-xl mx-auto">Безопасный обмен учебными материалами и личное облако хранения документов.</p>
+            <div class="flex justify-center gap-4 pt-4">
+                <button onclick="openAuthModal('teacher')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-bold px-8 py-4 rounded-2xl shadow-lg transition">Создать кабинет учителя</button>
+                <button onclick="openAuthModal('student')" class="bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-700 text-lg font-bold px-8 py-4 rounded-2xl transition">Войти как ученик</button>
+            </div>
+        </section>
+
+        <section id="teacher-screen" class="hidden space-y-8">
+            <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-slate-900" id="teacher-welcome-title">Добро пожаловать!</h2>
+                    <p class="text-slate-500 text-sm mt-1" id="teacher-profile-sub"></p>
+                </div>
+                <button onclick="goToProfileScreen()" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold px-4 py-2 rounded-xl text-sm transition">📂 Мой сейф и история</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="text-4xl mb-3">🎬</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-1">Видеоуроки</h3>
+                    <button onclick="openFileManager('video')" class="w-full mt-4 bg-violet-100 text-violet-700 font-bold py-2.5 rounded-xl transition">Загрузить файл</button>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="text-4xl mb-3">📸</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-1">Фото и схемы</h3>
+                    <button onclick="openFileManager('photo')" class="w-full mt-4 bg-pink-100 text-pink-700 font-bold py-2.5 rounded-xl transition">Загрузить файл</button>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="text-4xl mb-3">📄</div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-1">Документы и PDF</h3>
+                    <button onclick="openFileManager('document')" class="w-full mt-4 bg-blue-100 text-blue-700 font-bold py-2.5 rounded-xl transition">Загрузить файл</button>
+                </div>
+            </div>
+
+            <div id="file-manager-zone" class="hidden bg-white p-6 rounded-2xl shadow-md border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h4 class="text-lg font-bold text-slate-800">Выбранный раздел: <span id="active-category-name" class="text-indigo-600 font-extrabold uppercase"></span></h4>
+                    <button onclick="document.getElementById('file-manager-zone').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl items-center">
+                    <input id="upload-destination-id" type="text" placeholder="ID папки (например: olymp2026)" class="p-3 rounded-xl border text-sm focus:outline-none bg-white">
+                    <div class="flex items-center bg-white border rounded-xl p-1.5 overflow-hidden">
+                        <label class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg cursor-pointer shrink-0 transition">
+                            💻 Обзор ПК
+                            <input id="real-file-input" type="file" class="hidden" onchange="handleFileSelection()">
+                        </label>
+                        <span id="file-chosen-name" class="text-xs text-slate-400 italic px-3 truncate">Файл не выбран</span>
+                    </div>
+                    <button onclick="addFileToFolder()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition py-3 text-sm">Сохранить файл в эту папку</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                    <h3 class="text-xl font-bold text-slate-900 flex items-center gap-2">👥 Создать папку для УЧЕНИКОВ</h3>
+                    <input id="new-folder-id" type="text" placeholder="Уникальный ID папки" class="w-full border p-3 rounded-xl focus:outline-none text-sm">
+                    <input id="new-folder-name" type="text" placeholder="Название папки" class="w-full border p-3 rounded-xl focus:outline-none text-sm">
+                    <input id="new-folder-pass" type="password" placeholder="Пароль для учеников" class="w-full border p-3 rounded-xl focus:outline-none text-sm">
+                    <button onclick="createNewFolder(false)" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl transition text-sm shadow-sm">Создать открытую папку</button>
+                </div>
+
+                <div class="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-6 rounded-2xl shadow-xl space-y-4">
+                    <h3 class="text-xl font-bold text-amber-400 flex items-center gap-2">🔒 Создать ЛИЧНЫЙ СЕЙФ (Скрытый)</h3>
+                    <input id="private-folder-id" type="text" placeholder="Уникальный ID сейфа" class="w-full bg-white/10 border border-white/10 p-3 rounded-xl focus:outline-none text-sm text-white placeholder-slate-400">
+                    <input id="private-folder-name" type="text" placeholder="Название сейфа" class="w-full bg-white/10 border border-white/10 p-3 rounded-xl focus:outline-none text-sm text-white placeholder-slate-400">
+                    <button onclick="createNewFolder(true)" class="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-extrabold py-3 rounded-xl transition text-sm shadow-md">Создать личную секретную папку</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="student-screen" class="hidden space-y-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h2 class="text-3xl font-extrabold text-slate-900">Кабинет ученика</h2>
+                <p id="student-profile-sub-title" class="text-slate-400 text-sm mt-1"></p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                <div class="bg-white p-6 rounded-2xl shadow-md border space-y-4">
+                    <h3 class="text-xl font-bold text-slate-800">🔐 Доступ по паролю</h3>
+                    <input id="student-folder-id" type="text" placeholder="ID папки" class="w-full border p-3 rounded-xl focus:outline-none">
+                    <input id="student-password" type="password" placeholder="Пароль" class="w-full border p-3 rounded-xl focus:outline-none">
+                    <button onclick="accessFolder()" class="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition">Посмотреть уроки</button>
+                </div>
+                <div class="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                    <h3 class="text-xl font-bold text-slate-800">👩‍🏫 Доступные преподаватели</h3>
+                    <div id="teachers-directory" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="profile-screen" class="hidden space-y-8">
+            <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <div id="profile-large-avatar" class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-violet-600 to-indigo-700 text-white text-2xl font-black flex items-center justify-center uppercase">?</div>
+                    <div>
+                        <h2 class="text-2xl font-extrabold text-slate-900" id="profile-user-name">ФИО</h2>
+                        <p class="text-slate-400 text-sm font-medium mt-0.5" id="profile-user-status">Школа</p>
+                    </div>
+                </div>
+                <button onclick="goBackFromProfile()" class="bg-slate-900 text-white hover:bg-slate-800 font-bold px-5 py-3 rounded-xl text-sm transition">⬅️ Назад в панель</button>
+            </div>
+            <div id="profile-folders-list" class="space-y-4"></div>
+        </section>
+
+    </main>
+
+    <div id="auth-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 font-bold">✕</button>
+            <div class="flex border-b">
+                <button id="tab-login-btn" onclick="toggleAuthTab('login')" class="w-1/2 pb-3 font-bold border-b-2 border-indigo-600 text-indigo-600">Вход в систему</button>
+                <button id="tab-register-btn" onclick="toggleAuthTab('register')" class="w-1/2 pb-3 font-bold border-b-2 border-transparent text-slate-400">Регистрация</button>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4 block">
+                <input type="text" id="login-username" placeholder="Введите ваш Логин" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                <input type="password" id="login-password" placeholder="Введите ваш Пароль" class="w-full border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition">Войти в личный кабинет</button>
+            </form>
+
+            <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" id="reg-username" placeholder="Логин (eng/рус)">
+                    <input type="password" id="reg-password" placeholder="Пароль">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" id="reg-city" placeholder="Город (например: Актау)">
+                    <input type="text" id="reg-school" placeholder="Школа (например: 11 или IT-лицей)">
+                </div>
+                
+                <div id="teacher-fields" class="space-y-4 hidden">
+                    <div class="grid grid-cols-2 gap-3">
+                        <input type="text" id="reg-name" placeholder="Имя">
+                        <input type="text" id="reg-surname" placeholder="Фамилия">
+                    </div>
+                    <input type="text" id="reg-subject" placeholder="Ваш Предмет (например: История Казахстана)" class="w-full">
+                </div>
+
+                <div id="student-fields" class="space-y-4 hidden">
+                    <input type="text" id="reg-fullname" placeholder="Ваше полное ФИО (на русском)" class="w-full">
+                    <input type="text" id="reg-grade" placeholder="Класс (например: 10 А)" class="w-full">
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition">Завершить регистрацию</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentRoleMode = 'teacher';
+        let selectedCategory = '';
+        let base64FileData = ''; 
+        let attachedFileName = '';
+
+        // Настройка стилей инпутов налету, чтобы убрать кашу из HTML
+        document.querySelectorAll('#register-form input').forEach(input => {
+            input.className = "border p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 w-full";
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUser = localStorage.getItem('dalaspace_user');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    updateUIForUser();
+                } catch(e) { localStorage.removeItem('dalaspace_user'); }
+            }
+        });
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `flex items-center gap-2 px-5 py-3.5 rounded-2xl shadow-xl text-white font-bold transition-all duration-300 transform scale-90 opacity-0 min-w-[280px] text-sm pointer-events-auto`;
+            toast.classList.add(type === 'success' ? 'bg-emerald-500' : type === 'error' ? 'bg-rose-500' : 'bg-indigo-600');
+            toast.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.remove('scale-90', 'opacity-0'); toast.classList.add('scale-100', 'opacity-100'); }, 10);
+            setTimeout(() => { toast.classList.remove('scale-100', 'opacity-100'); toast.classList.add('scale-90', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        function openAttachedFile(url, fileName = 'Файл') {
+            if(!url || url === '#') return showToast("Файл не найден", "error");
+            try {
+                const parts = url.split(',');
+                const mime = parts[0].match(/:(.*?);/)[1];
+                const bstr = atob(parts[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while(n--) { u8arr[n] = bstr.charCodeAt(n); }
+                const blob = new Blob([u8arr], { type: mime });
+                const blobUrl = URL.createObjectURL(blob);
+                const win = window.open();
+                if (win) win.location.href = blobUrl;
+                else {
+                    const a = document.createElement('a');
+                    a.href = blobUrl; a.download = fileName;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                }
+            } catch (err) { showToast("Не удалось открыть файл", "error"); }
+        }
+
+        function showScreen(screenId) {
+            ['welcome-screen', 'teacher-screen', 'student-screen', 'profile-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function handleLogoClick() { if (currentUser) { showScreen(currentUser.role === 'teacher' ? 'teacher-screen' : 'student-screen'); } else { showScreen('welcome-screen'); } }
+        function goBackFromProfile() { handleLogoClick(); }
+        
+        function openAuthModal(role) { 
+            currentRoleMode = role; 
+            document.getElementById('auth-modal').classList.remove('hidden'); 
+            if (role === 'teacher') { 
+                document.getElementById('teacher-fields').classList.remove('hidden'); 
+                document.getElementById('student-fields').classList.add('hidden');
+            } else { 
+                document.getElementById('teacher-fields').classList.add('hidden'); 
+                document.getElementById('student-fields').classList.remove('hidden');
+            } 
+            toggleAuthTab('login'); 
+        }
+        
+        function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+        function toggleAuthTab(tab) { if(tab === 'login') { document.getElementById('login-form').classList.replace('hidden', 'block'); document.getElementById('register-form').classList.replace('block', 'hidden'); } else { document.getElementById('login-form').classList.replace('block', 'hidden'); document.getElementById('register-form').classList.replace('hidden', 'block'); } }
+
+        // СКРИПТ ПРОВЕРКИ ТЕКСТА РУССКОГО ЯЗЫКА
+        const cyrillicCheck = /^[А-Яа-яЁё\s\-]+$/;
+        const schoolCheck = /^[А-Яа-яЁёA-Za-z0-9\s\-\.,№()""«»]+$/;
+
+        async function handleRegister(e) {
+            e.preventDefault();
+
+            // Сбор значений и очистка от лишних пробелов по краям
+            const username = document.getElementById('reg-username').value.trim();
+            const password = document.getElementById('reg-password').value.trim();
+            const city = document.getElementById('reg-city').value.trim();
+            const school = document.getElementById('reg-school').value.trim();
+            const name = document.getElementById('reg-name').value.trim();
+            const surname = document.getElementById('reg-surname').value.trim();
+            const subject = document.getElementById('reg-subject').value.trim();
+            const fullName = document.getElementById('reg-fullname').value.trim();
+            const grade = document.getElementById('reg-grade').value.trim();
+
+            // 1. ПРОВЕРКА НА ПУСТЫЕ ПОЛЯ
+            if (!username || !password || !city || !school) {
+                return showToast("Пожалуйста, заполните все основные поля!", "error");
+            }
+            if (currentRoleMode === 'teacher' && (!name || !surname || !subject)) {
+                return showToast("Учитель должен заполнить Имя, Фамилию и Предмет!", "error");
+            }
+            if (currentRoleMode === 'student' && (!fullName || !grade)) {
+                return showToast("Ученик должен заполнить свое полное ФИО и Класс!", "error");
+            }
+
+            // 2. ЯЗЫКОВАЯ ВАЛИДАЦИЯ ЧЕРЕЗ JS ПОД СКАЗКУ ПОЛЬЗОВАТЕЛЯ
+            if (!cyrillicCheck.test(city)) {
+                return showToast("Поле 'Город' заполняется только на русском языке!", "error");
+            }
+            if (!schoolCheck.test(school)) {
+                return showToast("Поле 'Школа' содержит запрещенные спецсимволы!", "error");
+            }
+
+            if (currentRoleMode === 'teacher') {
+                if (!cyrillicCheck.test(name)) return showToast("Имя учителя должно быть на русском языке!", "error");
+                if (!cyrillicCheck.test(surname)) return showToast("Фамилия учителя должна быть на русском языке!", "error");
+                if (!cyrillicCheck.test(subject)) return showToast("Название предмета пишется только на русском!", "error");
+            }
+
+            if (currentRoleMode === 'student' && !cyrillicCheck.test(fullName)) {
+                return showToast("ФИО ученика пишется исключительно на русском языке!", "error");
+            }
+
+            const payload = { username, password, role: currentRoleMode, city, school, name, surname, subject, fullName, grade };
+            
+            const res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if(data.success) { showToast("Регистрация успешно завершена!"); toggleAuthTab('login'); } else { showToast(data.message, 'error'); }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+
+            if (!username || !password) return showToast("Введите ваш логин и пароль!", "error");
+
+            const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
+            const data = await res.json();
+            if (data.success) { currentUser = data.user; localStorage.setItem('dalaspace_user', JSON.stringify(currentUser)); closeAuthModal(); updateUIForUser(); showToast('Вход выполнен успешно!'); } else { showToast(data.message, 'error'); }
+        }
+
+        function updateUIForUser() {
+            document.getElementById('nav-buttons').classList.add('hidden');
+            document.getElementById('user-profile-badge').classList.remove('hidden');
+            if(currentUser.role === 'teacher') {
+                document.getElementById('badge-info').innerText = `${currentUser.name} ${currentUser.surname[0]}.`;
+                document.getElementById('teacher-welcome-title').innerText = `Рады видеть вас, ${currentUser.name}!`;
+                document.getElementById('teacher-profile-sub').innerText = `г. ${currentUser.city} | Школа: ${currentUser.school} | Предмет: ${currentUser.subject}`;
+                showScreen('teacher-screen');
+            } else {
+                document.getElementById('badge-info').innerText = currentUser.fullName || currentUser.username;
+                document.getElementById('student-profile-sub-title').innerText = `г. ${currentUser.city} | Школа: ${currentUser.school} | Класс: ${currentUser.grade}`;
+                showScreen('student-screen'); loadTeachersDirectory();
+            }
+            document.getElementById('avatar-circle').innerText = (currentUser.name?.[0] || currentUser.username?.[0] || 'U').toUpperCase();
+        }
+
+        function logout() { currentUser = null; localStorage.removeItem('dalaspace_user'); document.getElementById('nav-buttons').classList.remove('hidden'); document.getElementById('user-profile-badge').classList.add('hidden'); showScreen('welcome-screen'); }
+
+        function openFileManager(category) {
+            selectedCategory = category;
+            document.getElementById('file-manager-zone').classList.remove('hidden');
+            const titles = { 'video': 'Видеоуроки', 'photo': 'Фото и Схемы', 'document': 'Документы и PDF' };
+            document.getElementById('active-category-name').innerText = titles[category];
+            document.getElementById('file-chosen-name').innerText = 'Файл не выбран';
+            base64FileData = ''; attachedFileName = '';
+            document.getElementById('real-file-input').value = '';
+        }
+
+        function handleFileSelection() {
+            const input = document.getElementById('real-file-input');
+            if (input.files.length === 0) return;
+            const file = input.files[0];
+            attachedFileName = file.name;
+            document.getElementById('file-chosen-name').innerText = file.name;
+            const reader = new FileReader();
+            reader.onload = function(e) { base64FileData = e.target.result; };
+            reader.readAsDataURL(file);
+        }
+
+        async function addFileToFolder() {
+            const folderId = document.getElementById('upload-destination-id').value;
+            if(!folderId) return showToast("Укажите ID папки!", "error");
+            if(!base64FileData) return showToast("Выберите файл!", "error");
+
+            const res = await fetch('/api/add-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId, fileType: selectedCategory, fileName: attachedFileName, fileData: base64FileData }) });
+            const data = await res.json();
+            if(data.success) { showToast(data.message); openFileManager(selectedCategory); } else { showToast(data.error, 'error'); }
+        }
+
+        async function createNewFolder(isPrivate) {
+            const idInput = isPrivate ? 'private-folder-id' : 'new-folder-id';
+            const nameInput = isPrivate ? 'private-folder-name' : 'new-folder-name';
+            const passInput = isPrivate ? '' : 'new-folder-pass';
+
+            const folderId = document.getElementById(idInput).value;
+            const name = document.getElementById(nameInput).value;
+            const password = passInput ? document.getElementById(passInput).value : null;
+
+            if(!folderId || !name) return showToast("Заполните поля создания папки!", "error");
+
+            const res = await fetch('/api/create-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId, name, password, ownerId: currentUser.username, isPrivate }) });
+            const data = await res.json();
+            if(data.success) {
+                showToast(data.message);
+                document.getElementById(idInput).value = ''; document.getElementById(nameInput).value = '';
+                if(passInput) document.getElementById(passInput).value = '';
+            } else { showToast(data.error, 'error'); }
+        }
+
+        async function goToProfileScreen() {
+            if(!currentUser) return;
+            showScreen('profile-screen');
+            document.getElementById('profile-user-name').innerText = currentUser.fullName || `${currentUser.surname || ''} ${currentUser.name || currentUser.username}`;
+            document.getElementById('profile-user-status').innerText = currentUser.role === 'teacher' ? `Преподаватель | ${currentUser.school}` : `Ученик | ${currentUser.grade}`;
+            document.getElementById('profile-large-avatar').innerText = (currentUser.name?.[0] || currentUser.username?.[0]).toUpperCase();
+
+            const res = await fetch(`/api/profile-data/${currentUser.username}`);
+            const data = await res.json();
+
+            const foldersZone = document.getElementById('profile-folders-list');
+            foldersZone.innerHTML = data.folders.length === 0 ? `<p class="text-sm text-slate-400">Папок нет.</p>` : '';
+            
+            data.folders.forEach(f => {
+                let itemsList = f.files.map(file => `
+                    <div class="p-2 bg-white border rounded-xl flex items-center justify-between text-xs font-medium text-slate-700 shadow-sm">
+                        <span class="truncate">📄 ${file.name}</span>
+                        <button onclick="openAttachedFile('${file.url}', '${file.name}')" class="bg-indigo-50 text-indigo-600 font-bold px-2 py-1 rounded hover:bg-indigo-100">Открыть</button>
+                    </div>`).join('') || `<p class="text-xs text-slate-400 italic">Папка пуста</p>`;
+
+                foldersZone.innerHTML += `
+                    <div class="${f.isPrivate ? 'bg-slate-900 text-white border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-5 space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h4 class="font-extrabold text-base">${f.isPrivate ? '🔒 (Сейф) ' : '👥 (Для учеников) '}${f.name}</h4>
+                                <p class="text-xs ${f.isPrivate ? 'text-slate-400' : 'text-slate-500'} font-mono mt-0.5">ID: ${f.id}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-white/10">${itemsList}</div>
+                    </div>`;
+            });
+        }
+
+        async function loadTeachersDirectory() {
+            const res = await fetch('/api/teachers');
+            const teachers = await res.json();
+            const dir = document.getElementById('teachers-directory');
+            dir.innerHTML = '';
+            teachers.forEach(t => {
+                let foldersHtml = t.folders.map(f => `<span class="bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-md">ID: ${f.id}</span>`).join(' ') || 'Папок для учеников нет';
+                dir.innerHTML += `<div class="p-4 rounded-xl border bg-slate-50 space-y-1"><h4 class="font-bold">${t.surname} ${t.name}</h4><p class="text-xs text-indigo-600 font-semibold">${t.subject}</p><p class="text-xs text-slate-400">${t.school}</p><div class="pt-2 border-t flex flex-wrap gap-1">${foldersHtml}</div></div>`;
+            });
+        }
+
+        async function accessFolder() {
+            const folderId = document.getElementById('student-folder-id').value;
+            const password = document.getElementById('student-password').value;
+            if(!folderId || !password) return showToast("Введите ID папки и пароль!", "error");
+            
+            const res = await fetch('/api/access-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId, password, studentInfo: currentUser }) });
+            const data = await res.json();
+            if(data.success) { showToast("Доступ предоставлен!"); } else { showToast(data.message, 'error'); }
+        }
+    </script>
+</body>
+</html>

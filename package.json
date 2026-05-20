@@ -1,0 +1,14 @@
+{
+  "name": "teacher-platform",
+  "version": "1.0.0",
+  "description": "Educational platform for teachers and students",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}
