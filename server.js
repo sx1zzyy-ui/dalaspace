@@ -2,26 +2,19 @@ const express = require('express');
 const path = require('path');
 const bcrypt = require('bcryptjs'); 
 const mongoose = require('mongoose');
-const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Увеличиваем лимит, чтобы файлы (картинки/PDF) пролезали напрямую в базу данных
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Подключение к MongoDB Atlas (берется из настроек Render)
+// Подключение к MongoDB Atlas (берется из настроек Render, которые ты уже сделал)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('Успешно подключено к вечной базе MongoDB Atlas!'))
     .catch(err => console.error('Ошибка подключения к MongoDB:', err));
-
-// Подключение к Cloudinary (для хранения файлов)
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
 
 // --- СХЕМЫ ДАННЫХ ДЛЯ МОНГО ---
 const UserSchema = new mongoose.Schema({
@@ -36,7 +29,7 @@ const User = mongoose.model('User', UserSchema);
 const FolderSchema = new mongoose.Schema({
     folderId: { type: String, required: true, unique: true },
     ownerId: String, name: String, password: String, isPrivate: Boolean,
-    files: [{ type: { type: String }, name: String, url: String }]
+    files: [{ type: { type: String }, name: String, url: String }] // url будет хранить сам файл в base64
 });
 const Folder = mongoose.model('Folder', FolderSchema);
 
@@ -96,7 +89,7 @@ app.post('/api/register', async (req, res) => {
 // 2. АВТОРИЗАЦИЯ
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ success: false, message: 'Заполните fields!' });
+    if (!username || !password) return res.status(400).json({ success: false, message: 'Заполните поля!' });
 
     try {
         const user = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
@@ -145,7 +138,7 @@ app.post('/api/create-folder', async (req, res) => {
     } catch(e) { res.status(400).json({ error: 'Такой ID папки уже существует!' }); }
 });
 
-// 5. ЗАГРУЗКА ФАЙЛА В ОБЛАКО
+// 5. ЗАГРУЗКА ФАЙЛА ПРЯМО В МОНГО (БЕЗ CLOUDINARY)
 app.post('/api/add-file', async (req, res) => {
     const { folderId, fileType, fileName, fileData } = req.body;
     if(!folderId || !fileData) return res.status(400).json({ error: 'Данные отсутствуют' });
@@ -154,17 +147,13 @@ app.post('/api/add-file', async (req, res) => {
         const folder = await Folder.findOne({ folderId });
         if (!folder) return res.status(404).json({ error: 'Папка не найдена!' });
 
-        const uploadRes = await cloudinary.uploader.upload(fileData, {
-            resource_type: "auto", 
-            folder: "dalaspace_files"
-        });
-
-        folder.files.push({ type: fileType, name: fileName, url: uploadRes.secure_url });
+        // Сохраняем закодированный файл напрямую в документ папки в MongoDB
+        folder.files.push({ type: fileType, name: fileName, url: fileData });
         await folder.save();
 
-        res.json({ success: true, message: `Файл "${fileName}" загружен в облако!` });
+        res.json({ success: true, message: `Файл "${fileName}" загружен в базу данных!` });
     } catch (err) {
-        res.status(500).json({ error: 'Ошибка облака Cloudinary' });
+        res.status(500).json({ error: 'Ошибка сервера при сохранении файла.' });
     }
 });
 
